@@ -1,0 +1,334 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows.Forms;
+using System.Drawing;
+
+namespace SimpleAccounting
+{
+    static class Program
+    {
+        [STAThread]
+        static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainForm());
+        }
+    }
+
+    public class MainForm : Form
+    {
+        private AccountingSystem accounting;
+        private Label balanceLabel;
+        private Button incomeButton, expenseButton, balanceButton, transactionsButton, reportsButton, exitButton;
+
+        public MainForm()
+        {
+            accounting = new AccountingSystem();
+            InitializeComponents();
+        }
+
+        private void InitializeComponents()
+        {
+            Text = "簡單會計系統";
+            Size = new Size(600, 400);
+            StartPosition = FormStartPosition.CenterScreen;
+
+            // Balance Label
+            balanceLabel = new Label
+            {
+                Location = new Point(20, 20),
+                Size = new Size(200, 30),
+                Text = "當前餘額: $0.00",
+                Font = new Font("Segoe UI", 12, FontStyle.Bold)
+            };
+
+            // Buttons
+            incomeButton = CreateButton("記錄收入", 20, 60, OpenIncomeForm);
+            expenseButton = CreateButton("記錄支出", 20, 110, OpenExpenseForm);
+            balanceButton = CreateButton("查看餘額", 20, 160, UpdateBalance);
+            transactionsButton = CreateButton("查看交易記錄", 20, 210, ShowTransactions);
+            reportsButton = CreateButton("查看報表", 20, 260, ShowReportsMenu);
+            exitButton = CreateButton("退出", 20, 310, () => Close());
+
+            Controls.AddRange(new Control[] { balanceLabel, incomeButton, expenseButton, balanceButton, transactionsButton, reportsButton, exitButton });
+        }
+
+        private Button CreateButton(string text, int x, int y, Action clickAction)
+        {
+            var button = new Button
+            {
+                Text = text,
+                Location = new Point(x, y),
+                Size = new Size(150, 40),
+                Font = new Font("Segoe UI", 10),
+                BackColor = Color.FromArgb(0, 120, 215),
+                ForeColor = Color.White
+            };
+            button.Click += (s, e) => clickAction();
+            return button;
+        }
+
+        private void OpenIncomeForm()
+        {
+            var form = new TransactionForm("記錄收入", (amount, desc) => accounting.RecordIncome(amount, desc));
+            form.ShowDialog();
+            UpdateBalance();
+        }
+
+        private void OpenExpenseForm()
+        {
+            var form = new TransactionForm("記錄支出", (amount, desc) => accounting.RecordExpense(amount, desc));
+            form.ShowDialog();
+            UpdateBalance();
+        }
+
+        private void UpdateBalance()
+        {
+            balanceLabel.Text = $"當前餘額: {accounting.GetBalance():C}";
+        }
+
+        private void ShowTransactions()
+        {
+            var form = new ReportForm("交易記錄", accounting.GetTransactions());
+            form.ShowDialog();
+        }
+
+        private void ShowReportsMenu()
+        {
+            var form = new Form
+            {
+                Text = "選擇報表",
+                Size = new Size(300, 200),
+                StartPosition = FormStartPosition.CenterParent
+            };
+
+            var balanceSheetButton = CreateButton("資產負債表", 20, 20, () => { form.Close(); new ReportForm("資產負債表", accounting.GetBalanceSheet()).ShowDialog(); });
+            var incomeStatementButton = CreateButton("損益表", 20, 70, () => { form.Close(); new ReportForm("損益表", accounting.GetIncomeStatement()).ShowDialog(); });
+            var cashFlowButton = CreateButton("現金流量表", 20, 120, () => { form.Close(); new ReportForm("現金流量表", accounting.GetCashFlowStatement()).ShowDialog(); });
+
+            form.Controls.AddRange(new Control[] { balanceSheetButton, incomeStatementButton, cashFlowButton });
+            form.ShowDialog();
+        }
+    }
+
+    public class TransactionForm : Form
+    {
+        public TransactionForm(string title, Action<decimal, string> onSubmit)
+        {
+            Text = title;
+            Size = new Size(300, 200);
+            StartPosition = FormStartPosition.CenterParent;
+
+            var amountLabel = new Label { Text = "金額:", Location = new Point(20, 20), Size = new Size(100, 20) };
+            var amountTextBox = new TextBox { Location = new Point(120, 20), Size = new Size(100, 20) };
+            var descLabel = new Label { Text = "描述:", Location = new Point(20, 50), Size = new Size(100, 20) };
+            var descTextBox = new TextBox { Location = new Point(120, 50), Size = new Size(100, 20) };
+
+            var submitButton = new Button
+            {
+                Text = "確認",
+                Location = new Point(20, 100),
+                Size = new Size(80, 30),
+                BackColor = Color.FromArgb(0, 120, 215),
+                ForeColor = Color.White
+            };
+            submitButton.Click += (s, e) =>
+            {
+                if (decimal.TryParse(amountTextBox.Text, out decimal amount) && amount > 0)
+                {
+                    onSubmit(amount, descTextBox.Text);
+                    Close();
+                }
+                else
+                {
+                    MessageBox.Show("請輸入有效的正數金額！", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+
+            var cancelButton = new Button
+            {
+                Text = "取消",
+                Location = new Point(120, 100),
+                Size = new Size(80, 30),
+                BackColor = Color.Gray,
+                ForeColor = Color.White
+            };
+            cancelButton.Click += (s, e) => Close();
+
+            Controls.AddRange(new Control[] { amountLabel, amountTextBox, descLabel, descTextBox, submitButton, cancelButton });
+        }
+    }
+
+    public class ReportForm : Form
+    {
+        public ReportForm(string title, string reportContent)
+        {
+            Text = title;
+            Size = new Size(600, 400);
+            StartPosition = FormStartPosition.CenterParent;
+
+            var textBox = new TextBox
+            {
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Location = new Point(20, 20),
+                Size = new Size(540, 300),
+                Text = reportContent,
+                Font = new Font("Segoe UI", 10)
+            };
+
+            var closeButton = new Button
+            {
+                Text = "關閉",
+                Location = new Point(480, 330),
+                Size = new Size(80, 30),
+                BackColor = Color.Gray,
+                ForeColor = Color.White
+            };
+            closeButton.Click += (s, e) => Close();
+
+            Controls.AddRange(new Control[] { textBox, closeButton });
+        }
+
+        public ReportForm(string title, List<Transaction> transactions)
+        {
+            Text = title;
+            Size = new Size(600, 400);
+            StartPosition = FormStartPosition.CenterParent;
+
+            var grid = new DataGridView
+            {
+                Location = new Point(20, 20),
+                Size = new Size(540, 300),
+                ReadOnly = true,
+                AutoGenerateColumns = false
+            };
+            grid.Columns.Add("Date", "日期");
+            grid.Columns.Add("Type", "類型");
+            grid.Columns.Add("Amount", "金額");
+            grid.Columns.Add("Description", "描述");
+            foreach (var t in transactions)
+            {
+                grid.Rows.Add(t.Date.ToString("yyyy-MM-dd HH:mm"), t.Type, t.Amount.ToString("C"), t.Description);
+            }
+
+            var closeButton = new Button
+            {
+                Text = "關閉",
+                Location = new Point(480, 330),
+                Size = new Size(80, 30),
+                BackColor = Color.Gray,
+                ForeColor = Color.White
+            };
+            closeButton.Click += (s, e) => Close();
+
+            Controls.AddRange(new Control[] { grid, closeButton });
+        }
+    }
+
+    public class AccountingSystem
+    {
+        private decimal balance;
+        private List<Transaction> transactions;
+
+        public AccountingSystem()
+        {
+            balance = 0;
+            transactions = new List<Transaction>();
+        }
+
+        public void RecordIncome(decimal amount, string description)
+        {
+            if (amount <= 0) return;
+            balance += amount;
+            transactions.Add(new Transaction
+            {
+                Type = TransactionType.Income,
+                Amount = amount,
+                Description = description,
+                Date = DateTime.Now
+            });
+        }
+
+        public void RecordExpense(decimal amount, string description)
+        {
+            if (amount <= 0) return;
+            balance -= amount;
+            transactions.Add(new Transaction
+            {
+                Type = TransactionType.Expense,
+                Amount = amount,
+                Description = description,
+                Date = DateTime.Now
+            });
+        }
+
+        public decimal GetBalance()
+        {
+            return balance;
+        }
+
+        public List<Transaction> GetTransactions()
+        {
+            return transactions;
+        }
+
+        public string GetBalanceSheet()
+        {
+            return $@"資產負債表
+---------------------------------------------
+資產
+現金: {balance:C}
+總資產: {balance:C}
+
+負債與權益
+負債: $0.00
+權益: {balance:C}
+總負債與權益: {balance:C}";
+        }
+
+        public string GetIncomeStatement()
+        {
+            decimal totalIncome = transactions.Where(t => t.Type == TransactionType.Income).Sum(t => t.Amount);
+            decimal totalExpense = transactions.Where(t => t.Type == TransactionType.Expense).Sum(t => t.Amount);
+            decimal netIncome = totalIncome - totalExpense;
+
+            return $@"損益表
+---------------------------------------------
+收入: {totalIncome:C}
+支出: {totalExpense:C}
+淨利: {netIncome:C}";
+        }
+
+        public string GetCashFlowStatement()
+        {
+            decimal cashIn = transactions.Where(t => t.Type == TransactionType.Income).Sum(t => t.Amount);
+            decimal cashOut = transactions.Where(t => t.Type == TransactionType.Expense).Sum(t => t.Amount);
+            decimal netCashFlow = cashIn - cashOut;
+
+            return $@"現金流量表
+---------------------------------------------
+營運活動
+現金流入: {cashIn:C}
+現金流出: {cashOut:C}
+淨現金流量: {netCashFlow:C}";
+        }
+    }
+
+    public class Transaction
+    {
+        public TransactionType Type { get; set; }
+        public decimal Amount { get; set; }
+        public string Description { get; set; }
+        public DateTime Date { get; set; }
+    }
+
+    public enum TransactionType
+    {
+        Income,
+        Expense
+    }
+}
